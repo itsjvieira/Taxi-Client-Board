@@ -1,200 +1,131 @@
 import board
-import sys
-import threading
 import tkinter as tk
 from agents import *
+from enum import Enum
 
 
-# Receive Board Dimensions as Argument
-if len(sys.argv) != 3:
-    raise Exception("Invalid Board Dimensions Format")
-
-try:
-    length = int(sys.argv[1])
-    width = int(sys.argv[2])
-except ValueError:
-    raise Exception("Invalid Board Dimensions")
-
-board_size = (length, width)
-# debug prints #
-# print(board_size)
-################
+class Move(Enum):
+    up = 1
+    down = 2
+    left = 3
+    right = 4
 
 
-def wait_for_input():
-    taxis = {}
-    clients = {}
+class Environment:
+    def __init__(self, board_size):
+        self.board_size = board_size
+        self.taxis = {}
+        self.clients = {}
 
-    # Create Taxis
-    # taxi command format: taxi $id $x $y
-    inp = input()
-    inp = inp.split(" ")
-    while inp != ["end", "taxis"]:
-        if inp[0] != "taxi":
-            raise Exception("Wrong command: Insert Taxi Info")
-        if len(inp) != 4:
-            raise Exception("Invalid Taxi Input Format")
+        self.current_ts = 1
+        self.current_ts_moves = []
+        self.log_text = "* TIMESTEP " + str(self.current_ts) + " *\n"
 
-        try:
-            identifier = int(inp[1])
-            x = int(inp[2])
-            y = int(inp[3])
-        except ValueError:
-            raise Exception("Invalid Taxi Values")
+        root = tk.Tk()
+        self.gui = board.Board(root, board_size)
+        self.gui.update()
 
-        if x < 0 or x >= board_size[0] or y < 0 or y >= board_size[1]:
-            raise Exception("Invalid Coordinates")
+    def create_taxi(self, identifier, coordinates):
+        x = coordinates[0]
+        y = coordinates[1]
 
-        if identifier in taxis.keys():
-            raise Exception("Taxi ID already taken")
+        if x < 0 or x >= self.board_size[0] or y < 0 or y >= self.board_size[1]:
+            print("Invalid Coordinates")
+            return
 
-        gui.update_log_text("NEW TAXI - ID: " + str(identifier) + "; (" + str(x) + ", " + str(y) + ")\n")
-        taxis[identifier] = Taxi(x, y, identifier)
+        if identifier in self.taxis.keys():
+            print("Taxi ID already taken")
+            return
 
-        gui.update_board(taxis)
+        self.gui.update_log_text("NEW TAXI - ID: " + str(identifier) + "; (" + str(x) + ", " + str(y) + ")\n")
+        self.taxis[identifier] = Taxi(x, y, identifier)
 
-        # debug prints #
-        # print([taxi for taxi in taxis.values()])
-        ################
+        self.gui.update_board(self.taxis)
+        self.gui.update()
 
-        inp = input()
-        inp = inp.split(" ")
+    def create_client(self, coordinates):
+        x = coordinates[0]
+        y = coordinates[1]
 
-    # debug prints #
-    # print("taxis insertion end")
-    ################
+        if x < 0 or x >= self.board_size[0] or y < 0 or y >= self.board_size[1]:
+            print("Invalid Coordinates")
+            return
 
-    if len(taxis) == 0:
-        raise Exception("No Taxi Created")
+        if (x, y) in self.clients.keys():
+            print("Position Occupied by Another Client")
+            return
 
-    # Create Clients and Move Taxis
-    # client command format: client $x $y
-    # go command format: goto $id up/down/left/right
-    # pickup command format: pickup $id
-    # free command format: free $id
-    timestep = 1
-    current_ts_moves = []
-    # log text helps to keep track the actions performed
-    log_text = "* TIMESTEP " + str(timestep) + " *\n"
-    while True:
-        inp = input()
-        inp = inp.split(" ")
+        self.log_text += "NEW CLIENT - (" + str(x) + ", " + str(y) + ")\n"
+        self.clients[(x, y)] = Client(x, y)
+        self.gui.update()
 
-        if inp[0] == "client":
-            if len(inp) != 3:
-                raise Exception("Invalid Client Input Format")
+    def go(self, identifier, move):
+        if identifier in self.current_ts_moves:
+            print("Invalid Move: Taxi Already Moved in The Current Time Step")
+            return
 
-            try:
-                x = int(inp[1])
-                y = int(inp[2])
-            except ValueError:
-                raise Exception("Invalid Client Values")
+        old_x = self.taxis[identifier].x
+        old_y = self.taxis[identifier].y
 
-            if x < 0 or x >= board_size[0] or y < 0 or y >= board_size[1]:
-                raise Exception("Invalid Coordinates")
+        if move == Move.up:
+            if self.taxis[identifier].y > 0:
+                self.taxis[identifier].up()
+            else:
+                print("Invalid Move: Taxi Can Not Move Up")
+                return
+        elif move == Move.down:
+            if self.taxis[identifier].y < self.board_size[0] - 1:
+                self.taxis[identifier].down()
+            else:
+                print("Invalid Move: Taxi Can Not Move Down")
+                return
+        elif move == Move.left:
+            if self.taxis[identifier].x > 0:
+                self.taxis[identifier].left()
+            else:
+                print("Invalid Move: Taxi Can Not Move Left")
+                return
+        elif move == Move.right:
+            if self.taxis[identifier].x < self.board_size[1] - 1:
+                self.taxis[identifier].right()
+            else:
+                print("Invalid Move: Taxi Can Not Move Right")
+                return
 
-            if (x, y) in clients.keys():
-                raise Exception("Position Occupied by Another Client")
+        self.log_text += \
+            "MOVE TAXI - ID: " + str(identifier) + "; (" + \
+            str(old_x) + ", " + str(old_y) + ") -> (" + \
+            str(self.taxis[identifier].x) + ", " + str(self.taxis[identifier].y) + ")\n"
 
-            log_text += "NEW CLIENT - (" + str(x) + ", " + str(y) + ")\n"
-            clients[(x, y)] = Client(x, y)
-        elif inp[0] == "go":
-            if len(inp) != 3:
-                raise Exception("Invalid Move Input Format")
+        self.current_ts_moves.append(identifier)
+        self.gui.update()
 
-            try:
-                identifier = int(inp[1])
-            except ValueError:
-                raise Exception("Invalid Move Values")
+    def pickup(self, identifier):
+        x = self.taxis[identifier].x
+        y = self.taxis[identifier].y
 
-            if not (inp[2] == "up" or inp[2] == "down" or inp[2] == "left" or inp[2] == "right"):
-                raise Exception("Invalid Move Option")
+        if not (x, y) in self.clients.keys():
+            print("Invalid Pickup: There is no Client at The Current Position")
+            return
 
-            if identifier in current_ts_moves:
-                raise Exception("Invalid Move: Taxi Already Moved in The Current Time Step")
+        if not self.taxis[identifier].state == TaxiState.free:
+            print("Invalid Pickup: The Selected Taxi is Occupied")
+            return
 
-            old_x = taxis[identifier].x
-            old_y = taxis[identifier].y
+        self.log_text += "TAXI PICKUP - ID: " + str(identifier) + "\n"
+        del self.clients[(x, y)]
+        self.taxis[identifier].state = TaxiState.occupied
+        self.gui.update()
 
-            if inp[2] == "up":
-                if taxis[identifier].y > 0:
-                    taxis[identifier].up()
-                else:
-                    raise Exception("Invalid Move: Taxi Can Not Move Up")
-            elif inp[2] == "down":
-                if taxis[identifier].y < board_size[0]-1:
-                    taxis[identifier].down()
-                else:
-                    raise Exception("Invalid Move: Taxi Can Not Move Down")
-            elif inp[2] == "left":
-                if taxis[identifier].x > 0:
-                    taxis[identifier].left()
-                else:
-                    raise Exception("Invalid Move: Taxi Can Not Move Left")
-            elif inp[2] == "right":
-                if taxis[identifier].x < board_size[1]-1:
-                    taxis[identifier].right()
-                else:
-                    raise Exception("Invalid Move: Taxi Can Not Move Right")
+    def free(self, identifier):
+        self.log_text += "TAXI FREE - ID: " + str(identifier) + "\n"
+        self.taxis[identifier].state = TaxiState.free
+        self.gui.update()
 
-            log_text +=\
-                "MOVE TAXI - ID: " + str(identifier) + "; (" + \
-                str(old_x) + ", " + str(old_y) + ") -> (" + \
-                str(taxis[identifier].x) + ", " + str(taxis[identifier].y) + ")\n"
-
-            current_ts_moves.append(identifier)
-        elif inp[0] == "pickup":
-            if len(inp) != 2:
-                raise Exception("Invalid Pickup Input Format")
-
-            try:
-                identifier = int(inp[1])
-            except ValueError:
-                raise Exception("Invalid Pickup Values")
-
-            x = taxis[identifier].x
-            y = taxis[identifier].y
-
-            if x < 0 or x >= board_size[0] or y < 0 or y >= board_size[1]:
-                raise Exception("Invalid Coordinates")
-
-            if not (x, y) in clients.keys():
-                raise Exception("Invalid Pickup: There is no Client at The Current Position")
-
-            if not taxis[identifier].state == TaxiState.free:
-                raise Exception("Invalid Pickup: The Selected Taxi is Occupied")
-
-            log_text += "TAXI PICKUP - ID: " + str(identifier) + "\n"
-            del clients[(x, y)]
-            taxis[identifier].state = TaxiState.occupied
-        elif inp[0] == "free":
-            if len(inp) != 2:
-                raise Exception("Invalid Free Input Format")
-
-            try:
-                identifier = int(inp[1])
-            except ValueError:
-                raise Exception("Invalid Free Values")
-
-            log_text += "TAXI FREE - ID: " + str(identifier) + "\n"
-            taxis[identifier].state = TaxiState.free
-        elif inp == ["end", "moves"]:
-            gui.update_board(taxis, clients)
-            gui.update_log_text(log_text)
-            timestep += 1
-            log_text = "* TIMESTEP " + str(timestep) + " *\n"
-            current_ts_moves = []
-        else:
-            raise Exception("Wrong command: Insert Client Info or Move Taxi")
-
-        # debug prints #
-        # print([client for client in clients.values()])
-        # print([taxi for taxi in taxis.values()])
-        ################
-
-
-root = tk.Tk()
-gui = board.Board(root, board_size)
-thread = threading.Thread(target=wait_for_input)
-thread.start()
-gui.mainloop()
+    def end_timestep(self):
+        self.gui.update_board(self.taxis, self.clients)
+        self.gui.update_log_text(self.log_text)
+        self.current_ts += 1
+        self.log_text = "* TIMESTEP " + str(self.current_ts) + " *\n"
+        self.current_ts_moves = []
+        self.gui.update()
