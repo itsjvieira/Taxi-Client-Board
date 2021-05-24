@@ -16,11 +16,7 @@ class Board(tk.Frame):
         self.canvas = tk.Canvas(master, width=500, height=500)
         self.canvas.grid(row=0, column=0)
         # draw the grid
-        for i in range(self.board_size[0]):
-            x = i * SQUARE_SIDE
-            for j in range(self.board_size[1]):
-                y = j * SQUARE_SIDE
-                self.canvas.create_rectangle(x, y, x + SQUARE_SIDE, y + SQUARE_SIDE, fill="white")
+        self.update_board()
         # x numbers
         for i in range(self.board_size[0]):
             self.canvas.create_text((i * SQUARE_SIDE + SQUARE_SIDE / 2,
@@ -34,7 +30,7 @@ class Board(tk.Frame):
         self.log_text.grid(row=0, column=1)
         self.log_text.insert("end", "---------------\n- Command Log -\n---------------\n")
 
-    def update_board(self, taxis, clients=None):
+    def update_board(self, taxis=None, clients=None):
         # draw the grid
         for i in range(self.board_size[0]):
             x = i * SQUARE_SIDE
@@ -50,30 +46,31 @@ class Board(tk.Frame):
                 self.canvas.create_rectangle(x, y, x + SQUARE_SIDE, y + SQUARE_SIDE, fill="blue")
 
         # draw the taxis
-        for taxi in taxis.values():
-            x = taxi.x * SQUARE_SIDE
-            y = taxi.y * SQUARE_SIDE
-            # if the position is occupied by a client, represent the taxi as a triangle
-            if clients is not None and (taxi.x, taxi.y) in clients.keys():
-                points = [x, y, x + SQUARE_SIDE, y, x, y + SQUARE_SIDE]
+        if taxis is not None:
+            for taxi in taxis.values():
+                x = taxi.x * SQUARE_SIDE
+                y = taxi.y * SQUARE_SIDE
+                # if the position is occupied by a client, represent the taxi as a triangle
+                if clients is not None and (taxi.x, taxi.y) in clients.keys():
+                    points = [x, y, x + SQUARE_SIDE, y, x, y + SQUARE_SIDE]
 
-                if taxi.state == TaxiState.free:
-                    self.canvas.create_polygon(points, fill="orange")
-                elif taxi.state == TaxiState.occupied:
-                    self.canvas.create_polygon(points, fill="red")
+                    if taxi.state == TaxiState.free:
+                        self.canvas.create_polygon(points, fill="orange")
+                    elif taxi.state == TaxiState.occupied:
+                        self.canvas.create_polygon(points, fill="red")
 
-                self.canvas.create_text((x + SQUARE_SIDE / 4,
-                                         y + SQUARE_SIDE / 4),
-                                        text=str(taxi.identifier))
-            else:
-                if taxi.state == TaxiState.free:
-                    self.canvas.create_rectangle(x, y, x + SQUARE_SIDE, y + SQUARE_SIDE, fill="orange")
-                elif taxi.state == TaxiState.occupied:
-                    self.canvas.create_rectangle(x, y, x + SQUARE_SIDE, y + SQUARE_SIDE, fill="red")
+                    self.canvas.create_text((x + SQUARE_SIDE / 4,
+                                             y + SQUARE_SIDE / 4),
+                                            text=str(taxi.identifier))
+                else:
+                    if taxi.state == TaxiState.free:
+                        self.canvas.create_rectangle(x, y, x + SQUARE_SIDE, y + SQUARE_SIDE, fill="orange")
+                    elif taxi.state == TaxiState.occupied:
+                        self.canvas.create_rectangle(x, y, x + SQUARE_SIDE, y + SQUARE_SIDE, fill="red")
 
-                self.canvas.create_text((x + SQUARE_SIDE / 2,
-                                         y + SQUARE_SIDE / 2),
-                                        text=str(taxi.identifier))
+                    self.canvas.create_text((x + SQUARE_SIDE / 2,
+                                             y + SQUARE_SIDE / 2),
+                                            text=str(taxi.identifier))
 
     def update_log_text(self, log_text):
         self.log_text.insert("end", log_text)
